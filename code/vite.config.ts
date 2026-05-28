@@ -1,21 +1,18 @@
 import path from "path";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-import { cloudflare } from "@cloudflare/vite-plugin";
-import { mochaPlugins } from "@getmocha/vite-plugins";
 
+// Local dev config — Mocha plugins and Cloudflare auxiliary worker removed.
+// The game is 100% client-side; the worker (src/worker/index.ts) is empty.
+// To run on Cloudflare Workers again, restore @cloudflare/vite-plugin and
+// @getmocha/vite-plugins.
 export default defineConfig({
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-	  plugins: [
-	    ...mochaPlugins(process.env as any),
-	    react(),
-	    cloudflare({
-	      auxiliaryWorkers: [{ configPath: "/mocha/emails-service/wrangler.json" }],
-	    }),
-	  ],
-	  server: {
-	    allowedHosts: true,
-	  },
+  plugins: [react()],
+  server: {
+    port: 5173,
+    host: true,
+    allowedHosts: true,
+  },
   build: {
     chunkSizeWarningLimit: 5000,
   },

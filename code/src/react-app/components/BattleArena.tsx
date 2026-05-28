@@ -32,10 +32,6 @@ const DASH_IMPACT_RANGE = 90;     // Boost Dash (F) — hit when you slam into t
 const BLOOD_SWORD_RANGE = 500;    // Blood Sword Combo (L) — full-screen slash
 const DODGE_THREAT_RANGE = 160;   // Enemy decides to dodge when player attacks within this
 
-// === BACKWARD COMPAT ===
-// Kept for any internal references — represents the player's primary melee reach.
-const ATTACK_RANGE = MELEE_RANGE;
-
 const TRANSFORM_DURATION = 60; // seconds
 const CHAINSAW_SPEED_MULTIPLIER = 1.8;
 const CHAINSAW_DAMAGE_MULTIPLIER = 2.5;

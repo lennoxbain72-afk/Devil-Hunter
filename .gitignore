@@ -28,4 +28,4 @@ yarn-error.log*
 *.swo
 
 # Cloudflare
-worker-configuration.d.ts
+# worker-configuration.d.ts is committed (stub for empty Env) — uncomment to ignore when generated

@@ -1,0 +1,37 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "019e6ae0-fa01-710e-a8de-1015605547ea",
+  "main": "./src/worker/index.ts",
+  "compatibility_date": "2025-06-17",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true
+  },
+  "upload_source_maps": true,
+  "assets": {
+    "not_found_handling": "single-page-application"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "019e6ae0-fa01-710e-a8de-1015605547ea",
+      "database_id": "019e6ae0-fa01-710e-a8de-1015605547ea"
+    }
+  ],
+	  "r2_buckets": [
+	    {
+	      "binding": "R2_BUCKET",
+	      "bucket_name": "019e6ae0-fa01-710e-a8de-1015605547ea"
+	    }
+	  ],
+	  "services": [
+	    {
+	      "binding": "EMAILS",
+	      "service": "emails-service",
+	      "entrypoint": "EmailService",
+	      "props": {
+	        "appId": "019e6ae0-fa01-710e-a8de-1015605547ea"
+	      }
+	    }
+	  ]
+	}

@@ -14,6 +14,8 @@ export default defineConfig({
     allowedHosts: true,
   },
   build: {
+    // Vercel / v0 looks for an output folder named "build"; Vite defaults to "dist".
+    outDir: "build",
     chunkSizeWarningLimit: 5000,
   },
   resolve: {

@@ -57,18 +57,22 @@ export function PlayerFighter({
   return (
     <div className={cn(
       "relative flex flex-col items-center transition-all duration-150",
-      isHit && "animate-shake",
+      isHit && "animate-hit-flinch-left",
     )}>
       {/* Fighter Video Container */}
-      <div 
+      <div
         className={cn(
           "relative w-40 h-56 md:w-52 md:h-72 transition-all duration-150 overflow-hidden",
-          isAttacking && !isTransforming && "translate-x-4",
+          isAttacking && !isTransforming && "animate-attack-lunge-right",
           isBlocking && "scale-95 brightness-75",
           isDead && "opacity-30 grayscale rotate-90 translate-y-10",
           isHit && "brightness-150"
         )}
       >
+        {/* Red damage flash on impact */}
+        {isHit && (
+          <div className="absolute inset-0 z-20 bg-red-600 mix-blend-hard-light animate-damage-flash pointer-events-none" />
+        )}
         {/* Transformation Video (shown during transformation) */}
         {isTransforming && (
           <video

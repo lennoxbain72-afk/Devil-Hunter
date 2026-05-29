@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { HealthBar } from "./HealthBar";
 import { PlayerFighter } from "./PlayerFighter";
 import { EnemyFighter } from "./EnemyFighter";
@@ -21,16 +21,22 @@ interface FighterState {
 
 const HITS_FOR_TRANSFORM = 7;
 
-// === HITBOX / ATTACK RANGES ===
-// Fighter collision width is 80 — any melee range below ~90 is unreachable.
-// Ranges are tuned so each move's hitbox matches its visual reach.
-const MELEE_RANGE = 110;          // Basic punch & Close Slash (J) — short jab range
-const MELEE_FORGIVE = 30;         // Extra leniency before a move counts as a whiff
-const ENEMY_BASIC_RANGE = 120;    // Enemy normal attacks
-const ENEMY_SPECIAL_RANGE = 170;  // Enemy charged "Special Move" — longer reach
-const DASH_IMPACT_RANGE = 90;     // Boost Dash (F) — hit when you slam into the enemy
-const BLOOD_SWORD_RANGE = 500;    // Blood Sword Combo (L) — full-screen slash
-const DODGE_THREAT_RANGE = 160;   // Enemy decides to dodge when player attacks within this
+// === HITBOX / REACH (real on-screen pixels) ===
+// Combat reads the ACTUAL rendered sprite rectangles (getBoundingClientRect), so
+// a hit only lands when the visible characters are genuinely close. Each value is
+// the px gap between the two visible bodies at which that move connects.
+const MELEE_REACH = 64;           // Player punch & Close Slash (J)
+const DASH_REACH = 100;           // Boost Dash (F) impact
+const BLOOD_SWORD_REACH = 700;    // Blood Sword Combo (L) — full-screen slash
+const ENEMY_MELEE_REACH = 80;     // Enemy normal attacks
+const ENEMY_SPECIAL_REACH = 140;  // Enemy charged "Special Move" — longer reach
+const DODGE_REACH = 130;          // Enemy starts dodging when player swings within this
+// Side trim (fraction of each sprite container) to approximate the visible
+// character body inside the transparent video frame.
+const BODY_INSET_RATIO = 0.20;
+// Required vertical overlap (fraction of the shorter body) for a grounded melee
+// to connect — lets a jumping fighter evade ground attacks.
+const VOVERLAP_MIN = 0.35;
 
 const TRANSFORM_DURATION = 60; // seconds
 const CHAINSAW_SPEED_MULTIPLIER = 1.8;
@@ -117,6 +123,14 @@ export function BattleArena({ playerId = "denji", enemyId = "bat-devil", onRetur
   
   // Fighter collision - minimum distance between fighters
   const FIGHTER_WIDTH = 80;
+
+  // Refs to the two rendered fighter wrappers — used to read their REAL on-screen
+  // position so hit detection matches the visible sprites, not an abstract number.
+  const playerRef = useRef<HTMLDivElement>(null);
+  const enemyRef = useRef<HTMLDivElement>(null);
+  // Latest measured gap, refreshed on a fast interval so AI + checks can read it.
+  const gapRef = useRef<{ gap: number; vOverlap: boolean }>({ gap: Infinity, vOverlap: false });
+  const [uiInRange, setUiInRange] = useState(false);
   
   // Attack particle state
   const [playerAttackParticles, setPlayerAttackParticles] = useState(false);
@@ -133,12 +147,43 @@ export function BattleArena({ playerId = "denji", enemyId = "bat-devil", onRetur
   const JUMP_HEIGHT = 120;
   const JUMP_DURATION = 500; // ms
   
-  // Calculate distance between player and enemy
-  const distanceToEnemy = Math.abs(enemyX - playerX);
-
   const addLog = useCallback((message: string) => {
     setBattleLog(prev => [message, ...prev.slice(0, 4)]);
   }, []);
+
+  // Measure the real on-screen gap between the two visible fighter bodies.
+  // Returns the pixel gap (0 = bodies touching/overlapping) and whether they
+  // overlap vertically (false when one has jumped clear of the other).
+  const measureGap = useCallback(() => {
+    const pr = playerRef.current?.getBoundingClientRect();
+    const er = enemyRef.current?.getBoundingClientRect();
+    if (!pr || !er) return { gap: Infinity, vOverlap: false };
+    const pInset = pr.width * BODY_INSET_RATIO;
+    const eInset = er.width * BODY_INSET_RATIO;
+    const pL = pr.left + pInset, pR = pr.right - pInset;
+    const eL = er.left + eInset, eR = er.right - eInset;
+    let gap = 0;
+    if (pR < eL) gap = eL - pR;        // player body is left of enemy body
+    else if (eR < pL) gap = pL - eR;   // enemy body is left of player body
+    else gap = 0;                      // bodies overlap horizontally
+    const vSpan = Math.min(pr.bottom, er.bottom) - Math.max(pr.top, er.top);
+    const vOverlap = vSpan > Math.min(pr.height, er.height) * VOVERLAP_MIN;
+    return { gap, vOverlap };
+  }, []);
+
+  // Keep gapRef fresh (~30fps) and drive the in-range UI hint.
+  useEffect(() => {
+    if (gameState !== "fighting") return;
+    const id = setInterval(() => {
+      const g = measureGap();
+      gapRef.current = g;
+      setUiInRange(prev => {
+        const now = g.gap <= MELEE_REACH && g.vOverlap;
+        return prev === now ? prev : now;
+      });
+    }, 40);
+    return () => clearInterval(id);
+  }, [gameState, measureGap]);
 
   // Transformation timer countdown
   useEffect(() => {
@@ -271,7 +316,8 @@ export function BattleArena({ playerId = "denji", enemyId = "bat-devil", onRetur
         return;
       }
       
-      const distance = Math.abs(enemyX - playerX);
+      // Real on-screen gap between the visible bodies — drives all spacing.
+      const distance = gapRef.current.gap;
       moveAccumulator += 50;
       
       // STREET FIGHTER AI BEHAVIORS
@@ -290,7 +336,7 @@ export function BattleArena({ playerId = "denji", enemyId = "bat-devil", onRetur
       // REACTIVE AI: Respond to player attacks with dodge/counter
       if (player.isAttacking) {
         const dodgeChance = isTransformed ? 0.25 : 0.55; // Harder to dodge Chainsaw Man
-        if (distance <= DODGE_THREAT_RANGE && Math.random() < dodgeChance) {
+        if (distance <= DODGE_REACH && Math.random() < dodgeChance) {
           // In danger zone - emergency dodge!
           if (Math.random() > 0.4) {
             // Jump to evade
@@ -303,7 +349,7 @@ export function BattleArena({ playerId = "denji", enemyId = "bat-devil", onRetur
             setAiState("retreating");
           }
           return;
-        } else if (distance > MELEE_RANGE + MELEE_FORGIVE && Math.random() > 0.5) {
+        } else if (distance > MELEE_REACH + 40 && Math.random() > 0.5) {
           // Player whiffed - punish!
           burstMovesRemaining = 5;
           burstDirection = -1;
@@ -507,7 +553,7 @@ export function BattleArena({ playerId = "denji", enemyId = "bat-devil", onRetur
     
     // Enemy dodge/jump chance (40% normally, 20% when transformed)
     const dodgeChance = isTransformed ? 0.20 : 0.40;
-    const willDodge = Math.random() < dodgeChance && !enemy.isAttacking && !isEnemyJumping && distanceToEnemy <= DODGE_THREAT_RANGE;
+    const willDodge = Math.random() < dodgeChance && !enemy.isAttacking && !isEnemyJumping && gapRef.current.gap <= DODGE_REACH;
     
     if (willDodge) {
       // 50% chance to jump dodge, 50% to backstep
@@ -535,14 +581,15 @@ export function BattleArena({ playerId = "denji", enemyId = "bat-devil", onRetur
     }
     
     setTimeout(() => {
-      // Check if in range
-      if (distanceToEnemy > MELEE_RANGE) {
-        addLog("TOO FAR! Get closer!");
+      // Hit only connects if the visible bodies are actually close + lined up.
+      const { gap, vOverlap } = measureGap();
+      if (gap > MELEE_REACH || !vOverlap) {
+        addLog(vOverlap ? "TOO FAR! Get closer!" : "WHIFF! They're not in line!");
         setCombo(0);
         setPlayer(p => ({ ...p, isAttacking: false }));
         return;
       }
-      
+
       if (enemy.isBlocking) {
         addLog("BLOCKED!");
         playSound('block', 0.4);
@@ -596,7 +643,7 @@ export function BattleArena({ playerId = "denji", enemyId = "bat-devil", onRetur
       
       setPlayer(p => ({ ...p, isAttacking: false }));
     }, 150);
-  }, [gameState, player.isAttacking, player.isBlocking, enemy.isBlocking, combo, addLog, distanceToEnemy, isTransformed]);
+  }, [gameState, player.isAttacking, player.isBlocking, enemy.isBlocking, combo, addLog, measureGap, isTransformed]);
 
   const playerSpecial = useCallback(() => {
     if (gameState !== "fighting" || hitCount < HITS_FOR_TRANSFORM || player.isAttacking || isTransforming || isTransformed) return;
@@ -659,11 +706,11 @@ export function BattleArena({ playerId = "denji", enemyId = "bat-devil", onRetur
     
     const dashInterval = setInterval(() => {
       step++;
-      setPlayerX(prev => {
-        const newX = Math.min(500, prev + stepDistance);
-        // Hit when dash reaches enemy (must be >= fighter collision width of 80)
-        const distToEnemy = Math.abs(enemyX - newX);
-        if (distToEnemy < DASH_IMPACT_RANGE && !hasHit) {
+      setPlayerX(prev => Math.min(500, prev + stepDistance));
+      {
+        // Hit the moment the dash visually reaches the enemy's body.
+        const { gap } = measureGap();
+        if (gap < DASH_REACH && !hasHit) {
           hasHit = true;
           // Impact damage
           const damage = Math.floor(playerChar.damage * 1.5 + Math.random() * 10);
@@ -684,9 +731,8 @@ export function BattleArena({ playerId = "denji", enemyId = "bat-devil", onRetur
             setEnemyHitEffect(false);
           }, 200);
         }
-        return newX;
-      });
-      
+      }
+
       if (step >= dashSteps) {
         clearInterval(dashInterval);
         setIsBoostDashing(false);
@@ -696,7 +742,7 @@ export function BattleArena({ playerId = "denji", enemyId = "bat-devil", onRetur
         }
       }
     }, 20);
-  }, [gameState, isTransformed, isBoostDashing, player.isAttacking, isBloodSword, enemyX, addLog]);
+  }, [gameState, isTransformed, isBoostDashing, player.isAttacking, isBloodSword, measureGap, addLog]);
 
   // CHAINSAW MAN MOVESET - Blood Sword Combo (LONG RANGE attack)
   const bloodSwordCombo = useCallback(() => {
@@ -722,9 +768,8 @@ export function BattleArena({ playerId = "denji", enemyId = "bat-devil", onRetur
       currentSlash++;
       setSlashCount(currentSlash);
       
-      const currentDistance = Math.abs(enemyX - playerX);
-      // Blood Sword has LONG RANGE
-      if (currentDistance <= BLOOD_SWORD_RANGE) {
+      // Blood Sword has LONG RANGE — connects across most of the arena.
+      if (measureGap().gap <= BLOOD_SWORD_REACH) {
         const baseDamage = playerChar.damage * CHAINSAW_DAMAGE_MULTIPLIER;
         const damage = Math.floor(baseDamage * 0.6 + Math.random() * 8);
         
@@ -759,7 +804,7 @@ export function BattleArena({ playerId = "denji", enemyId = "bat-devil", onRetur
         addLog("COMBO COMPLETE!");
       }
     }, 150);
-  }, [gameState, isTransformed, isBloodSword, player.isAttacking, player.devilPower, isBoostDashing, enemyX, playerX, addLog]);
+  }, [gameState, isTransformed, isBloodSword, player.isAttacking, player.devilPower, isBoostDashing, measureGap, addLog]);
 
   // Enemy AI with custom moves
   useEffect(() => {
@@ -775,9 +820,8 @@ export function BattleArena({ playerId = "denji", enemyId = "bat-devil", onRetur
     ];
 
     const interval = setInterval(() => {
-      // Only attack when in range (use the longest possible reach so charged specials can fire)
-      const currentDistance = Math.abs(enemyX - playerX);
-      if (currentDistance > ENEMY_SPECIAL_RANGE) return; // Outside even the longest attack
+      // Only attempt an attack when the visible bodies are within the longest reach.
+      if (gapRef.current.gap > ENEMY_SPECIAL_REACH) return;
       
       if (Math.random() > 0.65 && !enemy.isAttacking && !enemyCharging) {
         // Pick a random move
@@ -799,9 +843,9 @@ export function BattleArena({ playerId = "denji", enemyId = "bat-devil", onRetur
             
             // Execute special attack
             setTimeout(() => {
-              // Check distance at moment of impact - special has the longest reach
-              const impactDistance = Math.abs(enemyX - playerX);
-              if (impactDistance > ENEMY_SPECIAL_RANGE) {
+              // Connects only if the visible bodies are still in special reach.
+              const impact = measureGap();
+              if (impact.gap > ENEMY_SPECIAL_REACH || !impact.vOverlap) {
                 addLog(`${move.name} missed! You dodged it.`);
                 setEnemy(e => ({ ...e, isAttacking: false }));
                 return;
@@ -849,9 +893,9 @@ export function BattleArena({ playerId = "denji", enemyId = "bat-devil", onRetur
           setTimeout(() => setEnemyAttackParticles(false), 400);
         
           setTimeout(() => {
-            // Check distance at moment of impact - enemy must still be in basic range
-            const impactDistance = Math.abs(enemyX - playerX);
-            if (impactDistance > ENEMY_BASIC_RANGE) {
+            // Connects only if the visible bodies are still in melee reach + lined up.
+            const impact = measureGap();
+            if (impact.gap > ENEMY_MELEE_REACH || !impact.vOverlap) {
               addLog(`${move.name} missed! Out of range.`);
               setEnemy(e => ({ ...e, isAttacking: false }));
               return;
@@ -1212,12 +1256,12 @@ export function BattleArena({ playerId = "denji", enemyId = "bat-devil", onRetur
               ⏱️ {transformTimeRemaining}s
             </div>
           )}
-          {distanceToEnemy > MELEE_RANGE && !isTransformed && (
+          {!uiInRange && !isTransformed && (
             <div className="font-display text-sm text-yellow-500 animate-pulse">
               GET CLOSER!
             </div>
           )}
-          {distanceToEnemy > MELEE_RANGE && isTransformed && distanceToEnemy <= BLOOD_SWORD_RANGE && (
+          {!uiInRange && isTransformed && (
             <div className="font-display text-sm text-red-500 animate-pulse">
               USE BLOOD SWORD (L)
             </div>
@@ -1307,13 +1351,14 @@ export function BattleArena({ playerId = "denji", enemyId = "bat-devil", onRetur
           </div>
         )}
         
-        <div 
+        <div
+          ref={playerRef}
           className="transition-transform duration-150 ease-out"
-          style={{ 
+          style={{
             transform: `translateX(${playerX}px) translateY(${-jumpY}px)`,
           }}
         >
-          <PlayerFighter 
+          <PlayerFighter
             isAttacking={player.isAttacking}
             isBlocking={player.isBlocking}
             isHit={player.isHit}
@@ -1380,13 +1425,14 @@ export function BattleArena({ playerId = "denji", enemyId = "bat-devil", onRetur
           </div>
         )}
         
-        <div 
+        <div
+          ref={enemyRef}
           className="transition-transform duration-150 ease-out"
-          style={{ 
+          style={{
             transform: `translateX(${enemyX - 300}px) translateY(${-enemyJumpY}px)`,
           }}
         >
-          <EnemyFighter 
+          <EnemyFighter
             isAttacking={enemy.isAttacking}
             isBlocking={enemy.isBlocking}
             isHit={enemy.isHit}

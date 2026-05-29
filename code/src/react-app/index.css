@@ -446,4 +446,77 @@
   .animate-dash-trail {
     animation: dash-trail 0.3s ease-out forwards;
   }
+
+  /* Bat Devil movement fog cloud */
+  @keyframes fog-in {
+    0% { opacity: 0; transform: scale(0.6); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+
+  @keyframes fog-drift-0 {
+    0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.85; }
+    33% { transform: translate(-14px, -8px) scale(1.18); opacity: 0.65; }
+    66% { transform: translate(12px, 6px) scale(0.92); opacity: 0.9; }
+  }
+
+  @keyframes fog-drift-1 {
+    0%, 100% { transform: translate(0, 0) scale(1.05); opacity: 0.7; }
+    40% { transform: translate(16px, -10px) scale(1.3); opacity: 0.5; }
+    70% { transform: translate(-10px, 8px) scale(0.85); opacity: 0.8; }
+  }
+
+  @keyframes fog-drift-2 {
+    0%, 100% { transform: translate(0, 0) scale(0.95) rotate(0deg); opacity: 0.8; }
+    50% { transform: translate(-8px, 10px) scale(1.25) rotate(8deg); opacity: 0.55; }
+  }
+
+  .animate-fog-0 { animation: fog-drift-0 2.4s ease-in-out infinite; }
+  .animate-fog-1 { animation: fog-drift-1 3.1s ease-in-out infinite; }
+  .animate-fog-2 { animation: fog-drift-2 2.8s ease-in-out infinite; }
+  .animate-fog-in { animation: fog-in 0.25s ease-out forwards; }
+
+  /* === HIT REACTIONS === */
+  /* Player faces right, so a hit knocks it back to the LEFT with a recoil tilt. */
+  @keyframes hit-flinch-left {
+    0%   { transform: translateX(0) rotate(0deg); }
+    15%  { transform: translateX(-14px) rotate(-7deg); }
+    40%  { transform: translateX(-8px) rotate(-3deg); }
+    65%  { transform: translateX(-12px) rotate(-5deg); }
+    100% { transform: translateX(0) rotate(0deg); }
+  }
+  /* Enemy faces left, so a hit knocks it back to the RIGHT. */
+  @keyframes hit-flinch-right {
+    0%   { transform: translateX(0) rotate(0deg); }
+    15%  { transform: translateX(14px) rotate(7deg); }
+    40%  { transform: translateX(8px) rotate(3deg); }
+    65%  { transform: translateX(12px) rotate(5deg); }
+    100% { transform: translateX(0) rotate(0deg); }
+  }
+  .animate-hit-flinch-left  { animation: hit-flinch-left 0.3s cubic-bezier(0.36, 0.07, 0.19, 0.97); }
+  .animate-hit-flinch-right { animation: hit-flinch-right 0.3s cubic-bezier(0.36, 0.07, 0.19, 0.97); }
+
+  /* Red damage flash that washes over the sprite on impact. */
+  @keyframes damage-flash {
+    0%   { opacity: 0.75; }
+    100% { opacity: 0; }
+  }
+  .animate-damage-flash { animation: damage-flash 0.25s ease-out forwards; }
+
+  /* === ATTACK LUNGES === */
+  /* Player lunges toward the enemy (right) then snaps back. */
+  @keyframes attack-lunge-right {
+    0%   { transform: translateX(0); }
+    35%  { transform: translateX(22px); }
+    55%  { transform: translateX(18px); }
+    100% { transform: translateX(0); }
+  }
+  /* Enemy lunges toward the player (left). */
+  @keyframes attack-lunge-left {
+    0%   { transform: translateX(0); }
+    35%  { transform: translateX(-22px); }
+    55%  { transform: translateX(-18px); }
+    100% { transform: translateX(0); }
+  }
+  .animate-attack-lunge-right { animation: attack-lunge-right 0.25s ease-out; }
+  .animate-attack-lunge-left  { animation: attack-lunge-left 0.25s ease-out; }
 }

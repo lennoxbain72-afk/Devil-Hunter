@@ -20,6 +20,10 @@ yarn-debug.log*
 yarn-error.log*
 *.log
 
+# Temp video-inspection scratch (safe to delete)
+_batwork/
+_inspect-batvideo.command
+
 # Editor / OS
 .DS_Store
 .vscode/
